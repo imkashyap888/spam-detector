@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spam Email Classifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f0f2f6; --white: #ffffff;
+      --primary: #ff4b4b; --primary-light: #fff0f0;
+      --ham: #21c354; --ham-light: #edfff3;
+      --text: #262730; --muted: #808495; --border: #e6e9ef;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+      --font: 'Source Sans 3', sans-serif;
+      --mono: 'Source Code Pro', monospace;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Topbar */
+    .topbar { background: var(--white); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .topbar-icon { width: 32px; height: 32px; background: var(--primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .topbar-title { font-weight: 700; font-size: 17px; }
+
+    /* Layout */
+    .layout { display: flex; flex: 1; max-width: 1100px; margin: 0 auto; width: 100%; padding: 28px 20px; gap: 24px; }
+
+    /* Sidebar */
+    .sidebar { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+    .sidebar-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px 4px; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+    .sidebar-item.active { background: var(--primary-light); color: var(--primary); }
+    .sidebar-divider { height: 1px; background: var(--border); margin: 8px 12px; }
+    .model-info { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 6px; }
+    .model-info-title { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+    .model-badge { display: inline-flex; align-items: center; gap: 5px; background: #fff3e0; color: #e65100; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; margin-bottom: 8px; }
+    .model-stat { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+    .model-stat:last-child { border-bottom: none; }
+    .model-stat span:first-child { color: var(--muted); }
+    .model-stat span:last-child { font-weight: 600; font-family: var(--mono); font-size: 11px; }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+    .page-title { font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .page-subtitle { font-size: 14px; color: var(--muted); line-height: 1.6; margin-top: 5px; }
+
+    /* Card */
+    .card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; box-shadow: var(--shadow); }
+    .section-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+
+    textarea { width: 100%; min-height: 155px; font-family: var(--mono); font-size: 13px; line-height: 1.65; color: var(--text); background: #fafbfc; border: 1.5px solid var(--border); border-radius: 8px; padding: 12px 14px; resize: vertical; outline: none; transition: border-color .2s, background .2s; }
+    textarea:focus { border-color: var(--primary); background: var(--white); }
+    textarea::placeholder { color: #b8bcc8; }
+    .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 5px; font-family: var(--mono); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tab { font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1.5px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all .15s; }
+    .tab:hover { border-color: var(--primary); color: var(--primary); }
+    .tab.active { background: var(--primary); border-color: var(--primary); color: white; }
+    .eg-text { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--text); background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 13px; cursor: pointer; transition: border-color .15s; }
+    .eg-text:hover { border-color: var(--primary); }
+    .eg-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-main { flex: 1; padding: 12px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; font-family: var(--font); font-weight: 700; font-size: 15px; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-main:hover { background: #e03c3c; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255,75,75,.3); }
+    .btn-main:active { transform: none; box-shadow: none; }
+    .btn-main:disabled { background: #e0e0e0; color: #aaa; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-sec { padding: 12px 18px; background: transparent; color: var(--muted); border: 1.5px solid var(--border); border-radius: 8px; font-family: var(--font); font-weight: 600; font-size: 14px; cursor: pointer; transition: all .2s; }
+    .btn-sec:hover { border-color: var(--text); color: var(--text); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+
+    .err { background: #fff5f5; border: 1px solid rgba(255,75,75,.3); border-radius: 8px; padding: 11px 14px; font-size: 13px; color: var(--primary); display: none; margin-top: 12px; }
+    .err.on { display: block; }
+
+    /* Result */
+    @keyframes up { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+    .result { border-radius: 12px; padding: 22px 24px; display: none; flex-direction: column; gap: 18px; border: 1px solid; box-shadow: var(--shadow); animation: up .35s ease; }
+    .result.on { display: flex; }
+    .result.spam { background: var(--primary-light); border-color: rgba(255,75,75,.2); }
+    .result.ham  { background: var(--ham-light);     border-color: rgba(33,195,84,.2); }
+    .r-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+    .r-verdict { display: flex; align-items: center; gap: 14px; }
+    .r-emoji { font-size: 38px; }
+    .r-label { font-size: 22px; font-weight: 700; line-height: 1.1; }
+    .spam .r-label { color: var(--primary); }
+    .ham  .r-label { color: var(--ham); }
+    .r-sub { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .r-badge { font-family: var(--mono); font-size: 13px; font-weight: 600; padding: 7px 16px; border-radius: 20px; }
+    .spam .r-badge { background: rgba(255,75,75,.12); color: var(--primary); }
+    .ham  .r-badge { background: rgba(33,195,84,.12); color: var(--ham); }
+    .g-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+    .g-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .g-meta { display: flex; justify-content: space-between; font-size: 13px; }
+    .g-lbl { font-weight: 600; }
+    .g-val { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .g-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .g-fill { height: 100%; border-radius: 4px; width: 0%; transition: width .9s cubic-bezier(.22,1,.36,1); }
+    .g-fill.s { background: var(--primary); }
+    .g-fill.h { background: var(--ham); }
+
+    @media (max-width: 720px) { .sidebar { display: none; } .layout { padding: 16px; } }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-icon">📧</div>
+  <span class="topbar-title">Spam Email Classifier</span>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-label">Navigation</div>
+    <div class="sidebar-item active">🔍&nbsp; Classifier</div>
+    <div class="sidebar-item">📊&nbsp; Analytics</div>
+    <div class="sidebar-item">📚&nbsp; About</div>
+    <div class="sidebar-divider"></div>
+    <div class="model-info">
+      <div class="model-info-title">Model Info</div>
+      <div class="model-badge">🤖 Naive Bayes</div>
+      <div style="height:6px"></div>
+      <div class="model-stat"><span>Algorithm</span><span>MultinomialNB</span></div>
+      <div class="model-stat"><span>Vectorizer</span><span>TF-IDF</span></div>
+      <div class="model-stat"><span>Features</span><span>3,000</span></div>
+      <div class="model-stat"><span>Classes</span><span>spam / ham</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div>
+      <div class="page-title">📬 Spam Email Classifier</div>
+      <div class="page-subtitle">Paste any email or message below. The model will predict whether it's <strong>spam</strong> or <strong>ham</strong> (legitimate).</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">✍️ Enter Email Content</div>
+      <textarea id="inp" placeholder="Paste your email text here…" oninput="cnt()"></textarea>
+      <div class="char-count"><span id="cc">0</span> characters</div>
+      <div class="err" id="err"></div>
+      <div class="btn-row">
+        <button class="btn-main" id="btn" onclick="go()">🔍 &nbsp;Classify Email</button>
+        <button class="btn-sec" onclick="clr()">Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">💡 Try an Example</div>
+      <div class="tabs">
+        <button class="tab active" onclick="tab(this,0)">🚨 Spam</button>
+        <button class="tab" onclick="tab(this,1)">✅ Ham</button>
+        <button class="tab" onclick="tab(this,2)">⚠️ Phishing</button>
+      </div>
+      <div class="eg-text" id="eg" onclick="useEg()"></div>
+      <div class="eg-hint">↑ Click to load into the classifier</div>
+    </div>
+
+    <div class="result" id="res">
+      <div class="r-top">
+        <div class="r-verdict">
+          <div class="r-emoji" id="emoji"></div>
+          <div>
+            <div class="r-label" id="lbl"></div>
+            <div class="r-sub"   id="sub"></div>
+          </div>
+        </div>
+        <div class="r-badge" id="badge"></div>
+      </div>
+      <div>
+        <div class="g-title">Prediction Probabilities</div>
+        <div class="g-row">
+          <div class="g-meta"><span class="g-lbl" style="color:var(--primary)">🚨 Spam</span><span class="g-val" id="sv"></span></div>
+          <div class="g-track"><div class="g-fill s" id="sf"></div></div>
+        </div>
+        <div class="g-row">
+          <div class="g-meta"><span class="g-lbl" style="color:var(--ham)">✅ Ham</span><span class="g-val" id="hv"></span></div>
+          <div class="g-track"><div class="g-fill h" id="hf"></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const EX = [
+  "Congratulations! You've been selected as a lucky winner of a $1,000 Walmart gift card. Click the link below to claim your prize before it expires in 24 hours!",
+  "Hi John, just a quick reminder that our team standup is at 10 AM tomorrow. Please come prepared with your weekly progress update. See you then!",
+  "URGENT: Your bank account has been temporarily suspended due to suspicious login activity. Verify your identity immediately at the link below to restore full access."
+];
+let cur = 0;
+function render() { document.getElementById('eg').textContent = EX[cur]; }
+function tab(el, i) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active'); cur = i; render(); }
+function useEg() { document.getElementById('inp').value = EX[cur]; cnt(); hide(); document.getElementById('inp').scrollIntoView({behavior:'smooth'}); }
+function cnt() { document.getElementById('cc').textContent = document.getElementById('inp').value.length; }
+function hide() { document.getElementById('res').className = 'result'; document.getElementById('err').className = 'err'; }
+function clr() { document.getElementById('inp').value = ''; cnt(); hide(); }
+
+async function go() {
+  const text = document.getElementById('inp').value.trim();
+  const btn = document.getElementById('btn');
+  if (!text) { const e = document.getElementById('err'); e.textContent = '⚠️ Please enter some text before classifying.'; e.className = 'err on'; return; }
+  hide();
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin"></div> Analyzing…';
+  try {
+    const r = await fetch('/api/predict', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text}) });
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const d = await r.json();
+    const spam = d.is_spam;
+    let sp = 0, hp = 0;
+    for (const [k,v] of Object.entries(d.confidence || {})) {
+      const key = String(k).toLowerCase();
+      if (key === 'spam' || key === '1') sp = v; else hp = v;
+    }
+    const top = spam ? sp : hp;
+    document.getElementById('emoji').textContent = spam ? '🚨' : '✅';
+    document.getElementById('lbl').textContent   = spam ? 'SPAM Detected' : 'Not Spam (Ham)';
+    document.getElementById('sub').textContent   = spam ? 'This message appears to be unsolicited or harmful.' : 'This message appears to be legitimate.';
+    document.getElementById('badge').textContent = (top*100).toFixed(1) + '% confident';
+    document.getElementById('sv').textContent    = (sp*100).toFixed(2) + '%';
+    document.getElementById('hv').textContent    = (hp*100).toFixed(2) + '%';
+    document.getElementById('res').className = 'result on ' + (spam ? 'spam' : 'ham');
+    requestAnimationFrame(() => setTimeout(() => {
+      document.getElementById('sf').style.width = (sp*100) + '%';
+      document.getElementById('hf').style.width = (hp*100) + '%';
+    }, 50));
+  } catch(e) {
+    const eb = document.getElementById('err'); eb.textContent = 'Error: ' + e.message; eb.className = 'err on';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 &nbsp;Classify Email';
+  }
+}
+document.getElementById('inp').addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') go(); });
+render();
+</script>
+</body>
+</html>
